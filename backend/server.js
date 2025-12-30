@@ -98,7 +98,7 @@ function adminOnly(req, res, next) {
 }
 
 // ======================
-// ROUTES
+// API ROUTES
 // ======================
 
 // Health check (Render test)
@@ -199,8 +199,23 @@ app.delete("/shifts/:id", authenticate, adminOnly, (req, res) => {
 });
 
 // ======================
+// 🔑 SERVE REACT FRONTEND
+// ======================
+
+// Path to React build folder
+const frontendBuildPath = path.join(__dirname, "../frontend/build");
+
+// Serve static files
+app.use(express.static(frontendBuildPath));
+
+// Catch-all: send React for any non-API route
+app.get("*", (req, res) => {
+  res.sendFile(path.join(frontendBuildPath, "index.html"));
+});
+
+// ======================
 // START SERVER (RENDER SAFE)
 // ======================
 app.listen(PORT, () => {
-  console.log(`🚀 Backend running on port ${PORT}`);
+  console.log(`🚀 Server running on port ${PORT}`);
 });
