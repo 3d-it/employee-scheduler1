@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 import api from "./api";
 
 export default function EmployeeModal({ onClose }) {
-  const [name, setName] = useState("");
   const [employees, setEmployees] = useState([]);
+  const [name, setName] = useState("");
   const [error, setError] = useState("");
 
   const auth = {
@@ -20,14 +20,15 @@ export default function EmployeeModal({ onClose }) {
     try {
       const res = await api.get("/employees", auth);
 
-      // ✅ HARD GUARD — only accept arrays
+      // ✅ ABSOLUTE GUARD
       if (Array.isArray(res.data)) {
         setEmployees(res.data);
       } else {
+        console.error("Employees API returned non-array:", res.data);
         setEmployees([]);
       }
     } catch (err) {
-      console.error("Failed to load employees", err);
+      console.error("Failed to load employees:", err);
       setEmployees([]);
       setError("Failed to load employees");
     }
@@ -41,19 +42,19 @@ export default function EmployeeModal({ onClose }) {
       setName("");
       loadEmployees();
     } catch (err) {
-      console.error("Failed to add employee", err);
-      alert("You must be logged in as admin");
+      console.error("Add employee failed:", err);
+      alert("Only admins can add employees");
     }
   };
 
   const deleteEmployee = async (id) => {
-    if (!window.confirm("Delete employee and all shifts?")) return;
+    if (!window.confirm("Delete employee?")) return;
 
     try {
       await api.delete(`/employees/${id}`, auth);
       loadEmployees();
     } catch (err) {
-      console.error("Failed to delete employee", err);
+      console.error("Delete failed:", err);
       alert("Delete failed");
     }
   };
@@ -61,12 +62,12 @@ export default function EmployeeModal({ onClose }) {
   return (
     <div className="modal">
       <div className="modal-box">
-        <h3>Manage Employees</h3>
+        <h3>Employees</h3>
 
         <input
-          placeholder="New employee name"
+          placeholder="Employee name"
           value={name}
-          onChange={e => setName(e.target.value)}
+          onChange={(e) => setName(e.target.value)}
         />
 
         <button onClick={addEmployee}>Add Employee</button>
@@ -75,10 +76,10 @@ export default function EmployeeModal({ onClose }) {
 
         <hr />
 
-        {/* ✅ SAFE MAP */}
+        {/* ✅ SAFE RENDER */}
         {employees.length === 0 && <p>No employees found</p>}
 
-        {employees.map(emp => (
+        {employees.map((emp) => (
           <div
             key={emp.id}
             style={{
