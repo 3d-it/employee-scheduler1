@@ -101,7 +101,7 @@ function adminOnly(req, res, next) {
 // API ROUTES
 // ======================
 
-// Health check (Render test)
+// Health check (Render)
 app.get("/health", (req, res) => {
   res.json({ status: "ok" });
 });
@@ -199,17 +199,17 @@ app.delete("/shifts/:id", authenticate, adminOnly, (req, res) => {
 });
 
 // ======================
-// 🔑 SERVE REACT FRONTEND (FIXED)
+// 🔑 SERVE REACT FRONTEND (NODE 22 SAFE)
 // ======================
 
 // Path to React build folder
 const frontendBuildPath = path.join(__dirname, "../frontend/build");
 
-// Serve static React files
+// Serve static assets
 app.use(express.static(frontendBuildPath));
 
-// ✅ FIXED catch-all route (Node 22 safe)
-app.get("/*", (req, res) => {
+// ✅ Catch-all using middleware (NOT app.get("*"))
+app.use((req, res) => {
   res.sendFile(path.join(frontendBuildPath, "index.html"));
 });
 
