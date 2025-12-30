@@ -2,9 +2,9 @@ import { useEffect, useState } from "react";
 import api from "./api";
 
 export default function EmployeeModal({ onClose }) {
-  const [employees, setEmployees] = useState([]);
+  const [employees, setEmployees] = useState([]); // ALWAYS array
   const [name, setName] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(null);
 
   const auth = {
     headers: {
@@ -20,21 +20,17 @@ export default function EmployeeModal({ onClose }) {
     try {
       const res = await api.get("/employees", auth);
 
+      // ✅ FORCE ARRAY
       if (Array.isArray(res.data)) {
         setEmployees(res.data);
       } else {
-        console.error("Employees API returned non-array:", res.data);
+        console.warn("Employees API returned non-array:", res.data);
         setEmployees([]);
       }
     } catch (err) {
-      console.error("Failed to load employees:", err);
+      console.error("Failed to load employees", err);
       setEmployees([]);
-
-      if (err.response?.status === 401) {
-        setError("Session expired. Please log in again.");
-      } else {
-        setError("Unable to load employees.");
-      }
+      setError("Failed to load employees");
     }
   }
 
@@ -45,65 +41,60 @@ export default function EmployeeModal({ onClose }) {
       await api.post("/employees", { name }, auth);
       setName("");
       loadEmployees();
-    } catch {
-      alert("Only admins can add employees");
+    } catch (err) {
+      console.error("Failed to add employee", err);
+      setError("Failed to add employee");
     }
   }
 
   async function deleteEmployee(id) {
-    if (!window.confirm("Delete employee?")) return;
-
     try {
       await api.delete(`/employees/${id}`, auth);
       loadEmployees();
-    } catch {
-      alert("Delete failed");
+    } catch (err) {
+      console.error("Failed to delete employee", err);
+      setError("Failed to delete employee");
     }
   }
 
   return (
-    <div className="modal">
-      <div className="modal-box">
-        <h3>Employees</h3>
-
-        <input
-          placeholder="Employee name"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-        />
-
-        <button onClick={addEmployee}>Add Employee</button>
+    <div className="modal-backdrop">
+      <div className="modal">
+        <h3>Manage Employees</h3>
 
         {error && <p style={{ color: "red" }}>{error}</p>}
 
-        <hr />
+        <div style={{ display: "flex", gap: "8px" }}>
+          <input
+            type="text"
+            placeholder="Employee name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+          />
+          <button onClick={addEmployee}>Add</button>
+        </div>
 
-        {/* ✅ RENDER GUARD (THIS IS THE KEY) */}
-        {Array.isArray(employees) && employees.length === 0 && (
-          <p>No employees found</p>
-        )}
+        <ul style={{ marginTop: "16px" }}>
+          {Array.isArray(employees) && employees.length > 0 ? (
+            employees.map((emp) => (
+              <li key={emp.id} style={{ marginBottom: "6px" }}>
+                {emp.name}
+                <button
+                  style={{ marginLeft: "10px" }}
+                  onClick={() => deleteEmployee(emp.id)}
+                >
+                  X
+                </button>
+              </li>
+            ))
+          ) : (
+            <li>No employees found</li>
+          )}
+        </ul>
 
-        {Array.isArray(employees) &&
-          employees.map((emp) => (
-            <div
-              key={emp.id}
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                marginBottom: "6px",
-              }}
-            >
-              <span>{emp.name}</span>
-              <button
-                style={{ background: "#dc2626", color: "white" }}
-                onClick={() => deleteEmployee(emp.id)}
-              >
-                Delete
-              </button>
-            </div>
-          ))}
-
-        <button onClick={onClose}>Close</button>
+        <button onClick={onClose} style={{ marginTop: "12px" }}>
+          Close
+        </button>
       </div>
     </div>
   );
