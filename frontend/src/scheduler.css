@@ -1,0 +1,76 @@
+.scheduler {
+  max-width: 1200px;
+  margin: auto;
+  background: white;
+}
+
+.header {
+  background: #1f3a5f;
+  color: white;
+  padding: 14px;
+  display: flex;
+  justify-content: space-between;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: 150px repeat(7, 1fr);
+}
+
+.header-cell,
+.employee {
+  background: #f4f6f9;
+  padding: 10px;
+  font-weight: bold;
+}
+
+.cell {
+  border: 1px solid #eee;
+  min-height: 60px;
+  padding: 6px;
+  cursor: pointer;
+}
+
+.shift {
+  display: inline-block;
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: white;
+  font-size: 12px;
+  margin: 2px;
+}
+
+.morning { background: #27ae60; }
+.mid { background: #3498db; }
+.evening { background: #f2994a; }
+.night { background: #8e44ad; }
+
+/* MOBILE */
+.mobile {
+  display: none;
+}
+
+.employee-card {
+  background: white;
+  padding: 12px;
+  margin-bottom: 12px;
+  box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+}
+
+.day-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+  cursor: pointer;
+}
+
+@media (max-width: 700px) {
+  .desktop {
+    display: none;
+  }
+
+  .mobile {
+    display: block;
+  }
+}
