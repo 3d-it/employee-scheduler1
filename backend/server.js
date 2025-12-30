@@ -199,17 +199,17 @@ app.delete("/shifts/:id", authenticate, adminOnly, (req, res) => {
 });
 
 // ======================
-// 🔑 SERVE REACT FRONTEND
+// 🔑 SERVE REACT FRONTEND (FIXED)
 // ======================
 
 // Path to React build folder
 const frontendBuildPath = path.join(__dirname, "../frontend/build");
 
-// Serve static files
+// Serve static React files
 app.use(express.static(frontendBuildPath));
 
-// Catch-all: send React for any non-API route
-app.get("*", (req, res) => {
+// ✅ FIXED catch-all route (Node 22 safe)
+app.get("/*", (req, res) => {
   res.sendFile(path.join(frontendBuildPath, "index.html"));
 });
 
