@@ -3,8 +3,8 @@ import api from "./api";
 
 export default function EmployeeModal({ onClose }) {
   const [name, setName] = useState("");
-  const [employees, setEmployees] = useState([]); // ✅ MUST be array
-  const [loading, setLoading] = useState(false);
+  const [employees, setEmployees] = useState([]);
+  const [error, setError] = useState("");
 
   const auth = {
     headers: {
@@ -18,16 +18,18 @@ export default function EmployeeModal({ onClose }) {
 
   const loadEmployees = async () => {
     try {
-      setLoading(true);
       const res = await api.get("/employees", auth);
 
-      // ✅ HARD SAFETY CHECK
-      setEmployees(Array.isArray(res.data) ? res.data : []);
+      // ✅ HARD GUARD — only accept arrays
+      if (Array.isArray(res.data)) {
+        setEmployees(res.data);
+      } else {
+        setEmployees([]);
+      }
     } catch (err) {
       console.error("Failed to load employees", err);
-      setEmployees([]); // ✅ prevents crash
-    } finally {
-      setLoading(false);
+      setEmployees([]);
+      setError("Failed to load employees");
     }
   };
 
@@ -35,16 +37,12 @@ export default function EmployeeModal({ onClose }) {
     if (!name.trim()) return;
 
     try {
-      await api.post(
-        "/employees",
-        { name },
-        auth
-      );
-
+      await api.post("/employees", { name }, auth);
       setName("");
       loadEmployees();
     } catch (err) {
       console.error("Failed to add employee", err);
+      alert("You must be logged in as admin");
     }
   };
 
@@ -56,6 +54,7 @@ export default function EmployeeModal({ onClose }) {
       loadEmployees();
     } catch (err) {
       console.error("Failed to delete employee", err);
+      alert("Delete failed");
     }
   };
 
@@ -67,21 +66,19 @@ export default function EmployeeModal({ onClose }) {
         <input
           placeholder="New employee name"
           value={name}
-          onChange={(e) => setName(e.target.value)}
+          onChange={e => setName(e.target.value)}
         />
 
         <button onClick={addEmployee}>Add Employee</button>
 
+        {error && <p style={{ color: "red" }}>{error}</p>}
+
         <hr />
 
-        {loading && <p>Loading employees...</p>}
+        {/* ✅ SAFE MAP */}
+        {employees.length === 0 && <p>No employees found</p>}
 
-        {/* ✅ SAFE MAP — WILL NEVER CRASH */}
-        {(Array.isArray(employees) ? employees : []).length === 0 && !loading && (
-          <p>No employees found</p>
-        )}
-
-        {(Array.isArray(employees) ? employees : []).map((emp) => (
+        {employees.map(emp => (
           <div
             key={emp.id}
             style={{
