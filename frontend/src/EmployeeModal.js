@@ -16,25 +16,28 @@ export default function EmployeeModal({ onClose }) {
     loadEmployees();
   }, []);
 
-  const loadEmployees = async () => {
+  async function loadEmployees() {
     try {
       const res = await api.get("/employees", auth);
 
-      // ✅ ABSOLUTE GUARD
-      if (Array.isArray(res.data)) {
-        setEmployees(res.data);
-      } else {
-        console.error("Employees API returned non-array:", res.data);
-        setEmployees([]);
-      }
+      // ✅ HARD SAFETY CHECK
+      const list = Array.isArray(res.data) ? res.data : [];
+      setEmployees(list);
     } catch (err) {
-      console.error("Failed to load employees:", err);
-      setEmployees([]);
-      setError("Failed to load employees");
-    }
-  };
+      console.error("Employees load failed:", err);
 
-  const addEmployee = async () => {
+      // ✅ NEVER allow non-array state
+      setEmployees([]);
+
+      if (err.response?.status === 401) {
+        setError("Session expired. Please log in again.");
+      } else {
+        setError("Failed to load employees.");
+      }
+    }
+  }
+
+  async function addEmployee() {
     if (!name.trim()) return;
 
     try {
@@ -42,22 +45,20 @@ export default function EmployeeModal({ onClose }) {
       setName("");
       loadEmployees();
     } catch (err) {
-      console.error("Add employee failed:", err);
       alert("Only admins can add employees");
     }
-  };
+  }
 
-  const deleteEmployee = async (id) => {
+  async function deleteEmployee(id) {
     if (!window.confirm("Delete employee?")) return;
 
     try {
       await api.delete(`/employees/${id}`, auth);
       loadEmployees();
-    } catch (err) {
-      console.error("Delete failed:", err);
+    } catch {
       alert("Delete failed");
     }
-  };
+  }
 
   return (
     <div className="modal">
@@ -76,7 +77,7 @@ export default function EmployeeModal({ onClose }) {
 
         <hr />
 
-        {/* ✅ SAFE RENDER */}
+        {/* ✅ GUARANTEED SAFE */}
         {employees.length === 0 && <p>No employees found</p>}
 
         {employees.map((emp) => (
