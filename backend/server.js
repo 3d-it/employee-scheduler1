@@ -1,29 +1,56 @@
+// backend/server.js
+
 const express = require("express");
 const sqlite3 = require("sqlite3").verbose();
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 const cors = require("cors");
 const helmet = require("helmet");
+const path = require("path");
 
 const app = express();
-app.use(express.json());
-app.use(cors());
+
+// ======================
+// MIDDLEWARE
+// ======================
 app.use(helmet());
+app.use(cors());
+app.use(express.json());
 
-const db = new sqlite3.Database("./scheduler.db");
-const JWT_SECRET = "CHANGE_THIS_SECRET";
+// ======================
+// ENV + PORT (RENDER SAFE)
+// ======================
+const PORT = process.env.PORT || 4000;
+const JWT_SECRET = process.env.JWT_SECRET;
 
-/* =====================
-   DATABASE
-===================== */
+if (!JWT_SECRET) {
+  console.error("❌ JWT_SECRET is not set");
+  process.exit(1);
+}
 
+// ======================
+// SQLITE DATABASE
+// ======================
+const dbPath = path.join(__dirname, "scheduler.db");
+
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error("❌ Failed to connect to SQLite:", err);
+    process.exit(1);
+  }
+  console.log("✅ Connected to SQLite database");
+});
+
+// ======================
+// DATABASE TABLES
+// ======================
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      email TEXT UNIQUE,
-      password_hash TEXT,
-      role TEXT
+      email TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      role TEXT NOT NULL
     )
   `);
 
@@ -35,122 +62,145 @@ db.serialize(() => {
   `);
 
   db.run(`
-    CREATE TABLE IF NOT EXISTS schedules (
+    CREATE TABLE IF NOT EXISTS shifts (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      employee_id INTEGER,
-      day TEXT,
-      shift_time TEXT,
-      shift_type TEXT
+      employee_id INTEGER NOT NULL,
+      day TEXT NOT NULL,
+      time TEXT NOT NULL,
+      type TEXT NOT NULL,
+      FOREIGN KEY(employee_id) REFERENCES employees(id)
     )
   `);
 });
 
-/* =====================
-   AUTH
-===================== */
+// ======================
+// AUTH MIDDLEWARE
+// ======================
+function authenticate(req, res, next) {
+  const header = req.headers.authorization;
+  if (!header) return res.status(401).json({ error: "No token" });
 
-function auth(req, res, next) {
-  const token = req.headers.authorization?.split(" ")[1];
-  if (!token) return res.sendStatus(401);
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.sendStatus(403);
-    req.user = user;
+  const token = header.split(" ")[1];
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.user = decoded;
     next();
-  });
+  } catch {
+    res.status(401).json({ error: "Invalid token" });
+  }
 }
 
 function adminOnly(req, res, next) {
-  if (req.user.role !== "admin") return res.sendStatus(403);
+  if (req.user.role !== "admin") {
+    return res.status(403).json({ error: "Admin only" });
+  }
   next();
 }
 
-/* =====================
-   LOGIN
-===================== */
+// ======================
+// ROUTES
+// ======================
 
+// Health check (Render test)
+app.get("/health", (req, res) => {
+  res.json({ status: "ok" });
+});
+
+// ---------- LOGIN ----------
 app.post("/login", (req, res) => {
   const { email, password } = req.body;
 
-  db.get("SELECT * FROM users WHERE email = ?", [email], async (err, user) => {
-    if (!user) return res.status(401).send("Invalid credentials");
+  db.get(
+    "SELECT * FROM users WHERE email = ?",
+    [email],
+    async (err, user) => {
+      if (err || !user) {
+        return res.status(401).json({ error: "Invalid login" });
+      }
 
-    const valid = await bcrypt.compare(password, user.password_hash);
-    if (!valid) return res.status(401).send("Invalid credentials");
+      const valid = await bcrypt.compare(password, user.password_hash);
+      if (!valid) {
+        return res.status(401).json({ error: "Invalid login" });
+      }
 
-    const token = jwt.sign(
-      { id: user.id, role: user.role },
-      JWT_SECRET,
-      { expiresIn: "8h" }
-    );
+      const token = jwt.sign(
+        { id: user.id, role: user.role },
+        JWT_SECRET,
+        { expiresIn: "8h" }
+      );
 
-    res.json({ token, role: user.role });
-  });
+      res.json({ token, role: user.role });
+    }
+  );
 });
 
-/* =====================
-   EMPLOYEES (ADMIN)
-===================== */
-
-app.get("/admin/employees", auth, adminOnly, (req, res) => {
-  db.all("SELECT id, name FROM employees ORDER BY name", (err, rows) => {
+// ---------- EMPLOYEES ----------
+app.get("/employees", authenticate, (req, res) => {
+  db.all("SELECT * FROM employees", (err, rows) => {
+    if (err) return res.status(500).json(err);
     res.json(rows);
   });
 });
 
-app.post("/admin/employees", auth, adminOnly, (req, res) => {
+app.post("/employees", authenticate, adminOnly, (req, res) => {
+  const { name } = req.body;
   db.run(
     "INSERT INTO employees (name) VALUES (?)",
-    [req.body.name],
-    function () {
+    [name],
+    function (err) {
+      if (err) return res.status(500).json(err);
+      res.json({ id: this.lastID, name });
+    }
+  );
+});
+
+app.delete("/employees/:id", authenticate, adminOnly, (req, res) => {
+  db.run(
+    "DELETE FROM employees WHERE id = ?",
+    [req.params.id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+      res.json({ success: true });
+    }
+  );
+});
+
+// ---------- SHIFTS ----------
+app.get("/shifts", authenticate, (req, res) => {
+  db.all("SELECT * FROM shifts", (err, rows) => {
+    if (err) return res.status(500).json(err);
+    res.json(rows);
+  });
+});
+
+app.post("/shifts", authenticate, adminOnly, (req, res) => {
+  const { employee_id, day, time, type } = req.body;
+
+  db.run(
+    `INSERT INTO shifts (employee_id, day, time, type)
+     VALUES (?, ?, ?, ?)`,
+    [employee_id, day, time, type],
+    function (err) {
+      if (err) return res.status(500).json(err);
       res.json({ id: this.lastID });
     }
   );
 });
 
-app.delete("/admin/employees/:id", auth, adminOnly, (req, res) => {
-  db.run("DELETE FROM employees WHERE id = ?", [req.params.id]);
-  db.run("DELETE FROM schedules WHERE employee_id = ?", [req.params.id]);
-  res.sendStatus(204);
-});
-
-/* =====================
-   SHIFTS (NO WEEK)
-===================== */
-
-app.get("/admin/shifts", auth, adminOnly, (req, res) => {
-  db.all("SELECT * FROM schedules", (err, rows) => {
-    res.json(rows);
-  });
-});
-
-app.post("/admin/shifts", auth, adminOnly, (req, res) => {
-  const { employeeId, day, time, type } = req.body;
-
+app.delete("/shifts/:id", authenticate, adminOnly, (req, res) => {
   db.run(
-    `
-    INSERT INTO schedules (employee_id, day, shift_time, shift_type)
-    VALUES (?, ?, ?, ?)
-    `,
-    [employeeId, day, time, type],
-    () => res.sendStatus(200)
+    "DELETE FROM shifts WHERE id = ?",
+    [req.params.id],
+    (err) => {
+      if (err) return res.status(500).json(err);
+      res.json({ success: true });
+    }
   );
 });
 
-app.delete("/admin/shifts", auth, adminOnly, (req, res) => {
-  const { employeeId, day } = req.body;
-
-  db.run(
-    "DELETE FROM schedules WHERE employee_id = ? AND day = ?",
-    [employeeId, day],
-    () => res.sendStatus(204)
-  );
+// ======================
+// START SERVER (RENDER SAFE)
+// ======================
+app.listen(PORT, () => {
+  console.log(`🚀 Backend running on port ${PORT}`);
 });
-
-/* =====================
-   SERVER
-===================== */
-
-app.listen(4000, () =>
-  console.log("Backend running on http://localhost:4000")
-);
