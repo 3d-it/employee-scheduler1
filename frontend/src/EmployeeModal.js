@@ -8,8 +8,8 @@ export default function EmployeeModal({ onClose }) {
 
   const auth = {
     headers: {
-      Authorization: `Bearer ${localStorage.getItem("token")}`
-    }
+      Authorization: `Bearer ${localStorage.getItem("token")}`,
+    },
   };
 
   useEffect(() => {
@@ -20,19 +20,20 @@ export default function EmployeeModal({ onClose }) {
     try {
       const res = await api.get("/employees", auth);
 
-      // ✅ HARD SAFETY CHECK
-      const list = Array.isArray(res.data) ? res.data : [];
-      setEmployees(list);
+      if (Array.isArray(res.data)) {
+        setEmployees(res.data);
+      } else {
+        console.error("Employees API returned non-array:", res.data);
+        setEmployees([]);
+      }
     } catch (err) {
-      console.error("Employees load failed:", err);
-
-      // ✅ NEVER allow non-array state
+      console.error("Failed to load employees:", err);
       setEmployees([]);
 
       if (err.response?.status === 401) {
         setError("Session expired. Please log in again.");
       } else {
-        setError("Failed to load employees.");
+        setError("Unable to load employees.");
       }
     }
   }
@@ -44,7 +45,7 @@ export default function EmployeeModal({ onClose }) {
       await api.post("/employees", { name }, auth);
       setName("");
       loadEmployees();
-    } catch (err) {
+    } catch {
       alert("Only admins can add employees");
     }
   }
@@ -77,27 +78,30 @@ export default function EmployeeModal({ onClose }) {
 
         <hr />
 
-        {/* ✅ GUARANTEED SAFE */}
-        {employees.length === 0 && <p>No employees found</p>}
+        {/* ✅ RENDER GUARD (THIS IS THE KEY) */}
+        {Array.isArray(employees) && employees.length === 0 && (
+          <p>No employees found</p>
+        )}
 
-        {employees.map((emp) => (
-          <div
-            key={emp.id}
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              marginBottom: "6px"
-            }}
-          >
-            <span>{emp.name}</span>
-            <button
-              style={{ background: "#dc2626", color: "white" }}
-              onClick={() => deleteEmployee(emp.id)}
+        {Array.isArray(employees) &&
+          employees.map((emp) => (
+            <div
+              key={emp.id}
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                marginBottom: "6px",
+              }}
             >
-              Delete
-            </button>
-          </div>
-        ))}
+              <span>{emp.name}</span>
+              <button
+                style={{ background: "#dc2626", color: "white" }}
+                onClick={() => deleteEmployee(emp.id)}
+              >
+                Delete
+              </button>
+            </div>
+          ))}
 
         <button onClick={onClose}>Close</button>
       </div>
